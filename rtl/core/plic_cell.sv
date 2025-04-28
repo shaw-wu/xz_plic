@@ -72,8 +72,8 @@ module plic_cell #(
   parameter PRIORITIES = 7,
 
   //These should be localparams, but that's not supported by all tools yet
-  parameter SOURCES_BITS  = $clog2(SOURCES +1), //0=reserved
-  parameter PRIORITY_BITS = $clog2(PRIORITIES)
+  parameter SOURCES_BITS  = 3,//log(SOURCES) 
+  parameter PRIORITY_BITS = 3
 )
 (
   input                          rst_ni,      //Asynchronous active low reset
@@ -102,4 +102,4 @@ module plic_cell #(
     else if ( ip_i && ie_i) id_o <= ID;
     else                    id_o <= 0;
 
-endmodule : plic_cell
+endmodule 

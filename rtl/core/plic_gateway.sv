@@ -95,10 +95,10 @@ module plic_gateway #(
   //
   // Variables
   //
-  logic                  src_dly, src_edge;
-  logic [COUNT_BITS-1:0] nxt_pending_cnt, pending_cnt;
-  logic                  decr_pending;
-  logic [           1:0] ip_state;
+  reg                  src_dly, src_edge;
+  reg [COUNT_BITS-1:0] nxt_pending_cnt, pending_cnt;
+  reg                  decr_pending;
+  reg [           1:0] ip_state;
 
 
   //////////////////////////////////////////////////////////////////
@@ -123,7 +123,7 @@ module plic_gateway #(
 
   /** generate pending-counter
    */
-  always_comb
+	always @(*) begin
     case ({decr_pending,src_edge})
       2'b00: nxt_pending_cnt = pending_cnt; //do nothing
       2'b01: if (pending_cnt < SAFE_MAX_PENDING_COUNT)
@@ -136,6 +136,7 @@ module plic_gateway #(
                nxt_pending_cnt = pending_cnt;
       2'b11: nxt_pending_cnt = pending_cnt; //do nothing
     endcase
+	end
 
 
   always @(posedge clk,negedge rst_n)
@@ -184,4 +185,4 @@ module plic_gateway #(
   //IP-bit is ip_state LSB
   assign ip = ip_state[0];
 
-endmodule : plic_gateway
+endmodule

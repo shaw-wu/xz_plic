@@ -73,8 +73,8 @@ module plic_core #(
   parameter MAX_PENDING_COUNT = 0,
 
   //These should be localparams, but that's not supported by all tools yet
-  parameter SOURCES_BITS     = $clog2(SOURCES+1),  //0=reserved
-  parameter PRIORITY_BITS    = $clog2(PRIORITIES)
+  parameter SOURCES_BITS     = 3, //log(SOURCES) 
+  parameter PRIORITY_BITS    = 3 
 )
 (
   input                      rst_n,               //Active low asynchronous reset
@@ -93,26 +93,17 @@ module plic_core #(
   input  [TARGETS      -1:0] claim,               //Interrupt claim
   input  [TARGETS      -1:0] complete             //Interrupt handling complete
 );
-  //////////////////////////////////////////////////////////////////
-  //
   // Variables
-  //
   genvar s, t;
 
-  logic [SOURCES_BITS -1:0] id_array       [TARGETS][SOURCES];
-  logic [PRIORITY_BITS-1:0] pr_array       [TARGETS][SOURCES];
+  reg [SOURCES_BITS -1:0] id_array       [TARGETS][SOURCES];
+  reg [PRIORITY_BITS-1:0] pr_array       [TARGETS][SOURCES];
 
-  logic [SOURCES_BITS -1:0] id_claimed     [TARGETS];
-  logic [TARGETS      -1:0] claim_array    [SOURCES];
-  logic [TARGETS      -1:0] complete_array [SOURCES];
+  reg [SOURCES_BITS -1:0] id_claimed     [TARGETS];
+  reg [TARGETS      -1:0] claim_array    [SOURCES];
+  reg [TARGETS      -1:0] complete_array [SOURCES];
 
-
-  //////////////////////////////////////////////////////////////////
-  //
   // Module Body
-  //
-
-
   /** Generate claim/complete per source, for each target
    */
 generate
@@ -125,7 +116,6 @@ generate
       end
   end
 endgenerate
-
 
   /** Store claimed ID
    */
@@ -212,4 +202,4 @@ generate
   end : gen_target
 endgenerate
 
-endmodule : plic_core
+endmodule

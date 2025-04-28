@@ -72,8 +72,8 @@ module plic_priority_index #(
   parameter LO         = 0,
 
   //These should be localparams, but that's not supported by all tools yet
-  parameter SOURCES_BITS  = $clog2(SOURCES +1), //0=reserved
-  parameter PRIORITY_BITS = $clog2(PRIORITIES)
+  parameter SOURCES_BITS  = 3, //log(SOURCES) 
+  parameter PRIORITY_BITS = 3
 )
 (
   input  [PRIORITY_BITS-1:0] priority_i [SOURCES], //Interrupt Priority
@@ -87,8 +87,8 @@ module plic_priority_index #(
   // Variables
   //
 
-  logic [PRIORITY_BITS-1:0] priority_hi, priority_lo;
-  logic [SOURCES_BITS -1:0] idx_hi,      idx_lo;
+  reg [PRIORITY_BITS-1:0] priority_hi, priority_lo;
+  reg [SOURCES_BITS -1:0] idx_hi,      idx_lo;
 
   //initial if (HI-LO>1) $display ("HI=%0d, LO=%0d -> hi(%0d,%0d) lo(%0d,%0d)", HI, LO, HI, HI-(HI-LO)/2, LO+(HI-LO)/2, LO);
 
@@ -138,5 +138,5 @@ module plic_priority_index #(
   assign priority_o = priority_hi > priority_lo ? priority_hi : priority_lo;
   assign idx_o      = priority_hi > priority_lo ? idx_hi      : idx_lo;
 
-endmodule : plic_priority_index
+endmodule 
 

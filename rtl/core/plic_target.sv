@@ -69,8 +69,8 @@ module plic_target #(
   parameter PRIORITIES = 7,
 
   //These should be localparams, but that's not supported by all tools yet
-  parameter SOURCES_BITS  = $clog2(SOURCES +1), //0=reserved
-  parameter PRIORITY_BITS = $clog2(PRIORITIES)
+  parameter SOURCES_BITS  = 3, //log(SOURCES) 
+  parameter PRIORITY_BITS = 3
 )
 (
   input                          rst_ni,               //Active low asynchronous reset
@@ -94,8 +94,8 @@ module plic_target #(
   //
   // Variables
   //
-  logic [SOURCES_BITS -1:0] id;
-  logic [PRIORITY_BITS-1:0] pr;
+  reg [SOURCES_BITS -1:0] id;
+  reg [PRIORITY_BITS-1:0] pr;
 
 
   //////////////////////////////////////////////////////////////////
@@ -129,4 +129,4 @@ module plic_target #(
   always @(posedge clk_i)
     id_o <= id;
 
-endmodule : plic_target
+endmodule 
