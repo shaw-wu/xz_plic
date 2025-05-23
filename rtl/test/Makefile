@@ -26,10 +26,10 @@ VSRC_DIR = $(CURDIR)/vsrc
 
 #编译与配置标志
 VERILATOR_FLAGS += -cc --exe \
-									 -Wall \
-									 --trace \
-									 --timing \
-									 --build
+									 -Wall     \
+									 --trace   \
+									 --timing  \
+									 --build   
 CXXFLAGS += -DSIM_TIME=$(SIM_TIME)
 ifeq ($(ENABLE_WAVEFORM), 1)
 CXXFLAGS += -DENABLE_WAVEFORM

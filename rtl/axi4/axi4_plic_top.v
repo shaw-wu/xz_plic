@@ -1,25 +1,24 @@
 //PLIC Port : AXI4
 //Surport burst mode and R/W chanel independent transmission.
+`timescale 1ns/1ps
 module axi4_plic_top #(
   //AXI Parameters
   parameter ADDR_BITS = 32,
   parameter DATA_BITS = 32,
 	parameter LOGSIZE_BITS = 3,
 	parameter LEN_BITS = 8,
-	parameter LEN_SIZE = 256, // 2 ^ LEN_BITS
-	parameter BURST_BITS = 2;
-  parameter RESP_BITS = 2;
-	parameter WSTRB_BITS = 4
-
+	parameter BURST_BITS = 2,
+  parameter RESP_BITS = 2,
+	parameter WSTRB_BITS = 4,
   //PLIC Parameters
-  parameter SOURCES           = 5, //Number of interrupt sources
+  parameter SOURCES           = 8, //Number of interrupt sources
   parameter TARGETS           = 1, //Number of interrupt targets
+	parameter TARGET_BITS      = 1,
+  parameter SOURCES_BITS  = 4, //$clog2(SOURCES+1), 0=reserved
+  parameter PRIORITY_BITS = 3, //$clog2(PRIORITIES)
   parameter PRIORITIES        = 8, //Number of Priority levels
-  parameter MAX_PENDING_COUNT = 8, //Max. number of 'pending' events
-  parameter HAS_THRESHOLD     = 1, //Is 'threshold' implemented?
-  parameter HAS_CONFIG_REG    = 1  //Is the 'configuration' register implemented?
-)
-(
+  parameter MAX_PENDING_COUNT = 8 //Max. number of 'pending' events
+)(
   input                         PRESETn,
                                 PCLK,
 	//AXI4
@@ -47,24 +46,29 @@ module axi4_plic_top #(
 	input                  wlast,
 	output                     bvalid,
 	input                      bready,
-	output reg [RSEP_BITS-1:0] bresp,
+	output reg [RESP_BITS-1:0] bresp,
   input      [SOURCES     -1:0] src,       //Interrupt sources
-  output reg [TARGETS     -1:0] irq        //Interrupt Requests
+  output reg [TARGETS     -1:0] irq,        //Interrupt Requests
+	output r_overflow,
+	output w_overflow
 );
 
-  localparam SOURCES_BITS  = 3; //$clog2(SOURCES+1), 0=reserved
-  localparam PRIORITY_BITS = 3; //$clog2(PRIORITIES)
 
   //Decoded registers
-  wire [SOURCES      -1:0] el,
-  wire                     ip;
+	wire [SOURCES-1      :0] el;
+  wire [SOURCES-1      :0] ip;
   wire [PRIORITY_BITS-1:0] p  [SOURCES];
-  wire [SOURCES      -1:0] ie [TARGETS];
+  wire [SOURCES-1      :0] ie [TARGETS];
   wire [PRIORITY_BITS-1:0] th [TARGETS];
   wire [SOURCES_BITS -1:0] id [TARGETS];
 
   wire [TARGETS      -1:0] claim,
                           complete;
+
+/* verilator lint_off UNUSEDSIGNAL */
+  wire [SOURCES      :0] _el;
+  wire [SOURCES      :0] _ie [TARGETS];
+/* verilator lint_off UNUSEDSIGNAL */
 
   //总线信号锁存
 	reg [LOGSIZE_BITS-1:0] reg_arsize;
@@ -81,8 +85,8 @@ module axi4_plic_top #(
 	reg										 reg_wlast;
 
 	//寄存器数据/控制信号
-	wire [DATA_BITS-1:0] _rdata;
-	wire [3:0] wen;
+	wire [DATA_BITS-1:0] wire_rdata /* verilator public */;
+	wire [WSTRB_BITS-1:0] wen;
 
 	//读写地址偏移（突发传输）
 	reg [ADDR_BITS-1:0]   r_offset, w_offset;
@@ -141,7 +145,7 @@ module axi4_plic_top #(
 						reg_araddr  <= araddr;
 						reg_arsize  <= arsize;
 						reg_arlen   <= arlen;
-						r_count   <= arlen + 1;
+						r_count     <= arlen + 1;
 						reg_arburst <= arburst;
 					end else begin
 						reg_araddr  <= {ADDR_BITS{1'b0}};
@@ -153,11 +157,10 @@ module axi4_plic_top #(
 				end
 				READ_WAIT_READY : begin
 					rresp <= 2'b0;
-					rdata <= _rdata;
+					rdata <= wire_rdata;
 					if (rready) begin 
 						reg_araddr <= reg_araddr + r_offset;
 						r_count  <= r_count - 1;
-						end
 					end
 				end
 				default : rdata <= 0;
@@ -171,7 +174,7 @@ module axi4_plic_top #(
 		if (!PRESETn) begin
 			write_state <= WRITE_IDLE;
 		end else begin
-			case (write_state) begin
+			case (write_state) 
 				WRITE_IDLE : begin
 					if (awvalid) begin
 						write_state <= WRITE_DATA;
@@ -210,13 +213,13 @@ module axi4_plic_top #(
 	  if (!PRESETn) begin
 			reg_awsize <= {LOGSIZE_BITS{1'b0}};
 			reg_awburst <= {BURST_BITS{1'b0}};
-      reg_awaddr <= {ADDR_BITS{1'b0}};
-			reg_awlen  <= {LEN_BITS{1'b0}}
+			reg_awaddr <= {ADDR_BITS{1'b0}};
+			reg_awlen  <= {LEN_BITS{1'b0}};
 			reg_wdata <= {DATA_BITS{1'b0}};
 			reg_wstrb <= {WSTRB_BITS{1'b0}};
 			reg_wlast <= 0;
 		end else begin	
-			case (write_state) begin
+			case (write_state) 
 				WRITE_IDLE : begin
 					if (awvalid) begin
 						reg_awsize  <= awsize;
@@ -227,7 +230,7 @@ module axi4_plic_top #(
 						reg_awsize  <= {LOGSIZE_BITS{1'b0}};
 						reg_awburst <= {BURST_BITS{1'b0}};
       			reg_awaddr  <= {ADDR_BITS{1'b0}};
-						reg_awlen   <= {LEN_BITS{1'b0}}
+						reg_awlen   <= {LEN_BITS{1'b0}};
 					end
 				end
 				WRITE_DATA : begin
@@ -253,14 +256,14 @@ module axi4_plic_top #(
 	//握手信号
 	assign arready = (read_state == READ_IDLE);
 	assign rvalid  = (read_state == READ_WAIT_READY);
-	assign awready = (write_state == WIRE_ILDE);
+	assign awready = (write_state == WRITE_IDLE);
 	assign wready  = (write_state == WRITE_DATA);
 	assign bvalid  = (write_state == WRITE_RESP);
 
-	assign rlast = (arlen == 1);
+	assign rlast = (r_count == 0);
 	
 	//寄存器写使能
-	assign wen = 4{wready & wvalid} && reg_wstrb;
+	assign wen = {WSTRB_BITS{write_state == WRITE_DELAY}} & reg_wstrb;
 
 	//地址偏移量
 	always @(*) begin
@@ -280,55 +283,51 @@ module axi4_plic_top #(
 		endcase
 	end
 
-  // Hookup Dynamic Register block
-  plic_dynamic_registers #(
-    //Bus Interface Parameters
-    .ADDR_SIZE  ( ADDR_SIZE ),
-    .DATA_SIZE  ( DATA_SIZE ),
-		.LOGSIZE_BITS ( LOGSIZE_BITS ), 
-		//.LEN_BITS     ( LEN_BITS     ),
-		//.BURST_BITS   ( BURST_BITS   ),
-  	.RESP_BITS    ( RESP_BITS    ), 
-		.WSTRB_BITS   ( WSTRB_BITS   ), 
+plic_regfile #(
+	.ADDR_BITS    (ADDR_BITS     ),
+	.DATA_BITS    (DATA_BITS     ), 
+	.WSTRB_BITS   (WSTRB_BITS    ), 
+	.BASE         (32'h10000000  ), 
+	.SOURCES      (SOURCES       ),
+	.PRIORITY_BITS(PRIORITY_BITS ),
+	.SOURCES_BITS (SOURCES_BITS  ),
+	.TARGETS      (TARGETS       ), 
+	.TARGET_BITS  (TARGET_BITS   )
+) r0(
+	.clk       (PCLK			 ),
+	.rstn      (PRESETn    ),
+	.raddr     (reg_araddr ),
+	.waddr     (reg_awaddr ),
+	.rdata     (wire_rdata ),
+	.wdata     (reg_wdata  ),
+	.wen       (wen        ),
+	.r_overflow(r_overflow ),
+	.w_overflow(w_overflow ),
+  .el        ( _el       ),
+  .ip        ( ip        ),
+  .ie        ( _ie       ),
+  .p				 ( p         ),
+  .th        ( th        ),
+  .id        ( id        ),
+  .claim     ( claim     ),
+  .complete  ( complete  )
+);
 
-    //PLIC Parameters
-    .SOURCES           ( SOURCES           ),
-    .TARGETS           ( TARGETS           ),
-    .PRIORITIES        ( PRIORITIES        ),
-    .MAX_PENDING_COUNT ( MAX_PENDING_COUNT ),
-    .HAS_THRESHOLD     ( HAS_THRESHOLD     ),
-    .HAS_CONFIG_REG    ( HAS_CONFIG_REG    )
-  )
-  dyn_register_inst (
-    .rst_n    ( PRESETn  ), //Active low asynchronous reset
-    .clk      ( PCLK     ), //System clock
-		.wen0     ( wen[0]   ),
-		.wen1     ( wen[1]   ),
-		.wen2     ( wen[2]   ),
-		.wen3     ( wen[3]   ),
-		.ren      ( ren      ),
-		.raddr    ( r_addr   ),
-		.rdata    ( _r_data   ),
-		.waddr    ( w_addr   ),
-		.wdata    ( w_data   ),
-
-    .el       ( el       ), //Edge/Level
-    .ip       ( ip       ), //Interrupt Pending
-
-    .ie       ( ie       ), //Interrupt Enable
-    .p        ( p        ), //Priority
-    .th       ( th       ), //Priority Threshold
-
-    .id       ( id       ), //Interrupt ID
-    .claim    ( claim    ), //Interrupt Claim
-    .complete ( complete )  //Interrupt Complete
- );
+genvar i;
+generate 
+	for (i = 0; i < TARGETS; i = i + 1) begin
+		assign ie[i] = _ie[i][SOURCES : 1];
+	end
+		assign el = _el[SOURCES : 1];
+endgenerate
 
   plic_core #(
     .SOURCES           ( SOURCES           ),
     .TARGETS           ( TARGETS           ),
     .PRIORITIES        ( PRIORITIES        ),
-    .MAX_PENDING_COUNT ( MAX_PENDING_COUNT )
+    .MAX_PENDING_COUNT ( MAX_PENDING_COUNT ),
+		.SOURCES_BITS      ( SOURCES_BITS      ),
+		.PRIORITY_BITS     ( PRIORITY_BITS     )
   )
   plic_core_inst (
     .rst_n     ( PRESETn  ),
@@ -347,5 +346,5 @@ module axi4_plic_top #(
     .complete  ( complete )
   );
 
-endmodule : apb4_plic_top
+endmodule
 

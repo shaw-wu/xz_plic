@@ -33,7 +33,7 @@
 /////////////////////////////////////////////////////////////////////
 
 // +FHDR -  Semiconductor Reuse Standard File Header Section  -------
-// FILE NAME      : plic_target.sv
+// FILE NAME      : plic_cell.sv
 // DEPARTMENT     :
 // AUTHOR         : rherveille
 // AUTHOR'S EMAIL :
@@ -44,89 +44,59 @@
 // ------------------------------------------------------------------
 // KEYWORDS : RISC-V PLATFORM LEVEL INTERRUPT CONTROLLER - PLIC
 // ------------------------------------------------------------------
-// PURPOSE  : PLIC Target
-//            Generates Interrupt Request and ID for each target
+// PURPOSE  : One source-target combination. Single cell of the 
+//            source-target matrix.
 // ------------------------------------------------------------------
 // PARAMETERS
 //  PARAM NAME        RANGE  DESCRIPTION              DEFAULT UNITS
+//  ID                1+     ID (source number)       1
 //  SOURCES           1+     No. of interupt sources  8
 //  PRIORITIES        1+     No. of priority levels   8
 // ------------------------------------------------------------------
 // REUSE ISSUES 
-//   Reset Strategy      : external asynchronous active low; rst_ni
-//   Clock Domains       : 1, clk, rising edge
-//   Critical Timing     :
-//   Test Features       : na
-//   Asynchronous I/F    : no
+//   Reset Strategy      : none 
+//   Clock Domains       : none, asynchronous block
+//   Critical Timing     : 
+//   Test Features       : 
+//   Asynchronous I/F    : Fully asynchronous block
 //   Scan Methodology    : na
-//   Instantiations      : plic_priority_index
+//   Instantiations      : none
 //   Synthesizable (y/n) : Yes
-//   Other               :                                         
+//   Other               : End-points (registers) are in the
+//                         plic_target module
 // -FHDR-------------------------------------------------------------
 
-module plic_target #(
-  parameter SOURCES = 8,
-  parameter PRIORITIES = 7,
-
-  //These should be localparams, but that's not supported by all tools yet
-  parameter SOURCES_BITS  = 3, //log(SOURCES) 
-  parameter PRIORITY_BITS = 3
+`timescale 1ns/1ps
+module plic_cell #(
+  parameter SOURCES_BITS  = 3,//log(SOURCES) 
+  parameter PRIORITY_BITS = 3,
+  parameter ID         = 1
 )
 (
-  input                          rst_ni,               //Active low asynchronous reset
-                                 clk_i,                //System clock
+  input                          rst_ni,      //Asynchronous active low reset
+  input                          clk_i,       //System clock
 
-  input      [SOURCES_BITS -1:0] id_i       [SOURCES], //Interrupt source
-  input      [PRIORITY_BITS-1:0] priority_i [SOURCES], //Interrupt Priority
+  //Interrupt Request
+  input                          ip_i,        //Interrupt pending
+  input                          ie_i,        //Interrupt Enable
+  input      [PRIORITY_BITS-1:0] priority_i,  //Interrupt priority
 
-  input      [PRIORITY_BITS-1:0] threshold_i,          //Interrupt Priority Threshold
-
-  output reg                     ireq_o,               //Interrupt Request (EIP)
-  output reg [SOURCES_BITS -1:0] id_o                  //Interrupt ID
+  output reg [SOURCES_BITS -1:0] id_o,        //Pending interrupt ID
+  output reg [PRIORITY_BITS-1:0] priority_o   //Pending interrupt priority
 );
-  //////////////////////////////////////////////////////////////////
-  //
-  // Constant
-  //
-
-
-  //////////////////////////////////////////////////////////////////
-  //
-  // Variables
-  //
-  reg [SOURCES_BITS -1:0] id;
-  reg [PRIORITY_BITS-1:0] pr;
-
-
   //////////////////////////////////////////////////////////////////
   //
   // Module Body
   //
 
-  /** Select highest priority pending interrupt
-   */
-  plic_priority_index #(
-    .SOURCES    ( SOURCES    ),
-    .PRIORITIES ( PRIORITIES ),
-    .HI         ( SOURCES -1 ),
-    .LO         ( 0          )
-  )
-  priority_index_tree (
-    .priority_i ( priority_i ),
-    .idx_i      ( id_i       ),
-    .priority_o ( pr         ),
-    .idx_o      ( id         )
-  );
-
-
-  /** Generate output
-  */
   always @(posedge clk_i,negedge rst_ni)
-    if      (!rst_ni          ) ireq_o <= 1'b0;
-    else if ( pr > threshold_i) ireq_o <= 1'b1;
-    else                        ireq_o <= 1'b0;
+    if      (!rst_ni      ) priority_o <= 0;
+    else if ( ip_i && ie_i) priority_o <= priority_i;
+    else                    priority_o <= 0;
 
-  always @(posedge clk_i)
-    id_o <= id;
+  always @(posedge clk_i,negedge rst_ni)
+    if      (!rst_ni      ) id_o <= 0;
+    else if ( ip_i && ie_i) id_o <= ID[SOURCES_BITS-1:0];
+    else                    id_o <= 0;
 
 endmodule 

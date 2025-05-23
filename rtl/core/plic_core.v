@@ -66,6 +66,7 @@
 //   Other               :                                         
 // -FHDR-------------------------------------------------------------
 
+`timescale 1ns/1ps
 module plic_core #(
   parameter SOURCES           = 8, //Number of interrupt sources
   parameter TARGETS           = 1, //Number of interrupt targets
@@ -161,9 +162,9 @@ generate
       for (s=0; s < SOURCES; s++)
       begin : gen_cell_source_array
           plic_cell #(
-            .ID         ( s +1       ),
-            .SOURCES    ( SOURCES    ),
-            .PRIORITIES ( PRIORITIES )
+            .ID           ( s +1          ),
+						.SOURCES_BITS ( SOURCES_BITS  ),
+						.PRIORITY_BITS( PRIORITY_BITS )
           )
           cell_inst (
             .rst_ni     ( rst_n           ),
@@ -187,8 +188,10 @@ generate
   for (t=0; t < TARGETS; t++)
   begin : gen_target
       plic_target #(
-        .SOURCES    ( SOURCES    ),
-        .PRIORITIES ( PRIORITIES )
+        .SOURCES      ( SOURCES       ),
+        .PRIORITIES   ( PRIORITIES    ),
+				.SOURCES_BITS ( SOURCES_BITS  ),
+				.PRIORITY_BITS( PRIORITY_BITS )
       )
       target_inst (
         .rst_ni      ( rst_n        ),
